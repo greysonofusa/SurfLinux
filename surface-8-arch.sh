@@ -31,34 +31,52 @@ timedatectl set-ntp true
 
 ### DISK PARTITIONING ###
 echo "Partitioning disk..."
+
+# Wipe existing partitions and partition table
 wipefs -af "$DISK"
 sgdisk -Z "$DISK"
 
 # Create partitions
-sgdisk -n 1:0:+1G -t 1:ef00 "$DISK"  # EFI Partition
-sgdisk -n 2:0:0   -t 2:8e00 "$DISK"  # Main Partition
+# /boot partition: 1GiB, FAT32
+sgdisk -n 1:0:+1G -t 1:ef00 "$DISK"
+
+# /EFI partition: 1GiB, FAT32
+sgdisk -n 2:0:+1G -t 1:ef00 "$DISK"
+
+# Swap partition: 16GiB
+sgdisk -n 3:0:+16G -t 3:8200 "$DISK"
+
+# Root partition: F2FS, using the remaining space (except for 1GiB free)
+sgdisk -n 4:0:0 -t 4:8300 "$DISK"
 
 partprobe "$DISK"
 
+# List created partitions
+lsblk "$DISK"
+
 ### FILESYSTEMS ###
-mkfs.fat -F32 "${DISK}p1"  # Format the EFI partition
+# Format /boot and /EFI as FAT32
+mkfs.fat -F32 "${DISK}p1"  # /boot
+mkfs.fat -F32 "${DISK}p2"  # /EFI
 
-# Initialize the physical volume on the second partition
-pvcreate -ff "${DISK}p2"  # Initialize the physical volume with -ff flag
+# Format the swap partition
+mkswap "${DISK}p3"
+swapon "${DISK}p3"
 
-# Create the volume group
-vgcreate "$VG" "${DISK}p2"  # Create the volume group
-
-# Create the logical volume
-lvcreate -l 100%FREE -n "$LV" "$VG"  # Create the logical volume
-
-# Format the logical volume with F2FS
-mkfs.f2fs "/dev/$VG/$LV"  # Format the logical volume with F2FS
+# Format the root partition with F2FS
+mkfs.f2fs "${DISK}p4"  # Root partition
 
 ### MOUNTS ###
-mount "/dev/$VG/$LV" /mnt
+# Mount root partition
+mount "${DISK}p4" /mnt
+
+# Create and mount EFI partition
 mkdir -p /mnt/efi
-mount "${DISK}p1" /mnt/efi
+mount "${DISK}p2" /mnt/efi
+
+# Create /boot partition mount point and mount it
+mkdir -p /mnt/boot
+mount "${DISK}p1" /mnt/boot
 
 ### BASE INSTALL ###
 pacstrap /mnt \
