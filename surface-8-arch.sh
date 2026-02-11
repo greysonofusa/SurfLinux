@@ -23,7 +23,7 @@ systemctl start ufw
 ufw enable
 ufw default deny incoming
 ufw default allow outgoing
-pacman -S --no-confirm steam lib32-mesa lib32-vulkan-intel vulkan-tools cosmic firefox lib32-vulkan-icd-loader lib32-gcc-libs gamemode lib32-gamemode ttf-liberation intel-media-driver lib32-intel-media-driver libva-utils thermald
+pacman -S steam lib32-mesa lib32-vulkan-intel vulkan-tools cosmic firefox lib32-vulkan-icd-loader lib32-gcc-libs gamemode lib32-gamemode ttf-liberation intel-media-driver lib32-intel-media-driver NetworkManager libva-utils thermald -y
 systemctl enable --now thermald
 dd if=/dev/zero of=/swapfile bs=1G count=16 status=progress
 chmod 0600 /swapfile
