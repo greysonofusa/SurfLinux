@@ -5,7 +5,7 @@
 #  GPU  : Intel Iris Xe / Tiger Lake-LP GT2
 #  RAM  : 8 GB Physical  |  16 GB SWAP (swapfile)
 #  DE   : COSMIC (System76) via AUR
-#  BOOT : systemd-boot (UEFI / Secure-Boot-off)
+#  BOOT : systemd-boot + sbctl Secure Boot (custom keys + Microsoft vendor keys)
 #  OPT  : Steam / Gaming / linux-cachyos-surface kernel (CachyOS + Surface patches)
 # =============================================================================
 # HOW TO USE:
@@ -442,7 +442,14 @@ cp /boot/initramfs-linux-cachyos-surface-fallback.img /boot/efi/ 2>/dev/null || 
 # Set cachyos-surface as the default boot entry
 sed -i 's/^default.*/default  arch-cachyos-surface.conf/' /boot/efi/loader/loader.conf
 
-# ── Update pacman hook to sync cachyos-surface kernel to ESP after updates ─────
+# ── Update pacman hook to sync cachyos-surface kernel to ESP + re-sign for SB ───
+# This hook fires after any kernel, intel-ucode, or systemd upgrade.
+# It:
+#   1. Copies updated kernel images to the ESP (systemd-boot reads from ESP)
+#   2. Runs sbctl sign-all to re-sign every registered EFI binary
+#      (so a kernel update never breaks Secure Boot — it's signed before next boot)
+#   3. Also updates the signed systemd-boot loader in /usr/lib so bootctl
+#      auto-copies the .signed version on loader updates
 cat > /etc/pacman.d/hooks/95-systemd-boot.hook <<'EOF'
 [Trigger]
 Type = Package
@@ -450,15 +457,105 @@ Operation = Upgrade
 Target = linux-cachyos-surface
 Target = linux
 Target = intel-ucode
+Target = systemd
 
 [Action]
-Description = Syncing kernels to ESP after upgrade...
+Description = Syncing kernels to ESP and re-signing for Secure Boot...
 When = PostTransaction
-Exec = /bin/sh -c 'for f in vmlinuz-linux-cachyos-surface initramfs-linux-cachyos-surface.img initramfs-linux-cachyos-surface-fallback.img vmlinuz-linux intel-ucode.img initramfs-linux.img initramfs-linux-fallback.img; do [ -f /boot/$f ] && cp /boot/$f /boot/efi/; done'
+Exec = /bin/sh -c '\
+  for f in vmlinuz-linux-cachyos-surface initramfs-linux-cachyos-surface.img \
+            initramfs-linux-cachyos-surface-fallback.img vmlinuz-linux \
+            intel-ucode.img initramfs-linux.img initramfs-linux-fallback.img; do \
+    [ -f /boot/$f ] && cp /boot/$f /boot/efi/; \
+  done; \
+  sbctl sign-all 2>/dev/null || true; \
+  sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed \
+    /usr/lib/systemd/boot/efi/systemd-bootx64.efi 2>/dev/null || true'
 EOF
 
 # Enable iptsd for Surface touchscreen & pen input
 systemctl enable iptsd
+
+# =============================================================================
+#  ░░  SECURE BOOT — sbctl (custom keys + Microsoft vendor keys)  ░░
+# =============================================================================
+#
+# Overview:
+#   sbctl generates three Secure Boot key pairs:
+#     • Platform Key (PK)      — root of trust, your key
+#     • Key Exchange Key (KEK) — signs updates to the signature database
+#     • Database Key (db)      — used to sign kernels and bootloaders
+#
+#   We sign all EFI binaries with our db key, then enroll our keys into the
+#   UEFI firmware alongside Microsoft's vendor keys using 'sbctl enroll-keys -m'.
+#
+#   Why -m (keep Microsoft's keys)?
+#     The Surface Pro 8's UEFI firmware itself is signed and verified by
+#     Microsoft's keys at startup. Enrolling WITHOUT -m would prevent Surface
+#     firmware (UEFI/SAM) updates from ever working again. Always use -m on
+#     Surface hardware.
+#
+#   Auto-signing on update:
+#     sbctl ships a built-in pacman hook that re-signs registered files after
+#     every kernel/systemd upgrade. Our custom 95-systemd-boot.hook (above)
+#     also calls 'sbctl sign-all' after copying kernels to the ESP, ensuring
+#     the newly copied files are signed before the next boot.
+#
+#   ⚠️  IMPORTANT — what this script does vs what YOU must do manually:
+#     This script:  installs sbctl, creates keys, signs all EFI binaries,
+#                   sets up auto-resign hooks
+#     You must do:  enroll keys into the UEFI firmware (requires physical
+#                   interaction with the Surface UEFI — cannot be scripted)
+#                   See POST-INSTALL SECURE BOOT STEPS printed at the end.
+
+pacman -S --noconfirm sbctl
+
+# ── Generate Secure Boot signing keys ─────────────────────────────────────────
+# Keys are stored in /var/lib/sbctl/keys/ (PK, KEK, db — RSA 4096)
+sbctl create-keys
+
+# ── Sign the systemd-boot loader — source file AND ESP copies ─────────────────
+# Signing /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed is the recommended
+# approach: when bootctl installs or updates the loader, it auto-copies the
+# .signed version to the ESP instead of the unsigned .efi. This means loader
+# updates (via systemd-boot-update.service or bootctl update) stay signed
+# without any extra manual steps.
+sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed \
+    /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+
+# Sign the ESP copies (already present from bootctl install above)
+sbctl sign -s /boot/efi/EFI/systemd/systemd-bootx64.efi  2>/dev/null || true
+sbctl sign -s /boot/efi/EFI/BOOT/BOOTX64.EFI             2>/dev/null || true
+
+# ── Sign the kernels on the ESP ────────────────────────────────────────────────
+# Using -s (--save) registers the file path in sbctl's database at
+# /var/lib/sbctl/files.json — so 'sbctl sign-all' and the built-in pacman hook
+# automatically resign these paths whenever the kernel is updated.
+sbctl sign -s /boot/efi/vmlinuz-linux-cachyos-surface 2>/dev/null || true
+sbctl sign -s /boot/efi/vmlinuz-linux                 2>/dev/null || true
+
+# ── Verify the signing database ────────────────────────────────────────────────
+# This shows every registered file and whether it's currently signed.
+# It is NORMAL for this to show some unsigned files during install (e.g. if a
+# path doesn't exist yet). The pacman hook ensures they're signed on first update.
+echo ""
+echo ">>> sbctl signing database:"
+sbctl list-files || true
+echo ""
+echo ">>> sbctl status (Secure Boot will show 'disabled' — that's expected now):"
+sbctl status || true
+echo ""
+
+# ── Enable systemd-boot-update for automatic loader updates ───────────────────
+# Keeps the systemd-boot EFI loader up to date on reboots when systemd upgrades.
+# Combined with the signed source file above, updates stay signed automatically.
+systemctl enable systemd-boot-update.service
+
+# ────────────────────────────────────────────────────────────────────────────────
+# NOTE: Key enrollment (sbctl enroll-keys -m) CANNOT be done during install.
+# It must be run from the booted system with the UEFI in Setup Mode.
+# Full instructions are printed at the end of this install script.
+# ────────────────────────────────────────────────────────────────────────────────
 
 # ── Gaming & Steam packages ────────────────────────────────────────────────────
 # NOTE: multilib is already enabled above.
@@ -887,9 +984,51 @@ echo -e "${BOLD}${GREEN}║  2. Reboot — select 'linux-cachyos-surface' at boo
 echo -e "${BOLD}${GREEN}║  3. Log into COSMIC as '${USERNAME}'                        ║${NC}"
 echo -e "${BOLD}${GREEN}║  4. Open Steam → enable Proton in Settings → Steam Play  ║${NC}"
 echo -e "${BOLD}${GREEN}║  5. Add 'gamemoderun %command%' to game launch options   ║${NC}"
-echo -e "${BOLD}${GREEN}║  6. Add 'MANGOHUD=1 %command%' for the FPS overlay       ║${NC}"
-echo -e "${BOLD}${GREEN}║  7. Run 'gpu-check' in terminal to verify Intel Xe GPU   ║${NC}"
-echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
+echo -e "${BOLD}${GREEN}║  6. Run 'gpu-check' in terminal to verify Intel Xe GPU   ║${NC}"
+echo -e "${BOLD}${GREEN}╠══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}${YELLOW}║  SECURE BOOT ENROLLMENT (do after first successful boot) ║${NC}"
+echo -e "${BOLD}${YELLOW}╠══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}${YELLOW}║  Your signing keys are created and all EFI binaries are  ║${NC}"
+echo -e "${BOLD}${YELLOW}║  signed. You now need to enroll those keys into the UEFI.║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  STEP 1 — Enter Surface UEFI Setup Mode:                 ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Power off → hold Volume Up + Power to enter UEFI      ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Go to: Security → Secure Boot → Clear Secure Boot Keys║${NC}"
+echo -e "${BOLD}${YELLOW}║    (This puts the UEFI into 'Setup Mode' — required)     ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Save & exit. Boot into Arch Linux.                    ║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  STEP 2 — Verify Setup Mode is active:                   ║${NC}"
+echo -e "${BOLD}${YELLOW}║    sudo sbctl status                                     ║${NC}"
+echo -e "${BOLD}${YELLOW}║    → 'Setup Mode: Enabled' must show before continuing   ║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  STEP 3 — Enroll keys (with Microsoft vendor keys):      ║${NC}"
+echo -e "${BOLD}${YELLOW}║    sudo sbctl enroll-keys -m                             ║${NC}"
+echo -e "${BOLD}${YELLOW}║    ⚠ The -m flag keeps Microsoft's keys — REQUIRED on   ║${NC}"
+echo -e "${BOLD}${YELLOW}║      Surface hardware so firmware updates still work.    ║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  STEP 4 — SHUT DOWN (do NOT reboot!):                    ║${NC}"
+echo -e "${BOLD}${YELLOW}║    sudo shutdown now                                     ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Surface quirk: a direct reboot skips the firmware key ║${NC}"
+echo -e "${BOLD}${YELLOW}║    write — you must fully power off, then power back on. ║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  STEP 5 — Enter UEFI and enable Secure Boot:             ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Power on → hold Volume Up + Power → enter UEFI        ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Go to: Security → Secure Boot → Enable Secure Boot    ║${NC}"
+echo -e "${BOLD}${YELLOW}║    Save & exit. Boot into Arch Linux.                    ║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  STEP 6 — Verify Secure Boot is active:                  ║${NC}"
+echo -e "${BOLD}${YELLOW}║    sudo sbctl status                                     ║${NC}"
+echo -e "${BOLD}${YELLOW}║    → 'Secure Boot: enabled'  ✓                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║    → 'Vendor Keys: microsoft' ✓                         ║${NC}"
+echo -e "${BOLD}${YELLOW}║    sudo bootctl status | grep 'Secure Boot'              ║${NC}"
+echo -e "${BOLD}${YELLOW}║    → 'Secure Boot: enabled (user)'  ✓                   ║${NC}"
+echo -e "${BOLD}${YELLOW}║                                                          ║${NC}"
+echo -e "${BOLD}${YELLOW}║  AUTO-SIGNING AFTER UPDATES:                             ║${NC}"
+echo -e "${BOLD}${YELLOW}║    After 'sudo pacman -Syu', the pacman hook             ║${NC}"
+echo -e "${BOLD}${YELLOW}║    automatically copies new kernels to the ESP AND       ║${NC}"
+echo -e "${BOLD}${YELLOW}║    re-signs them with sbctl sign-all. You never need to  ║${NC}"
+echo -e "${BOLD}${YELLOW}║    manually sign after a kernel update.                  ║${NC}"
+echo -e "${BOLD}${YELLOW}╚══════════════════════════════════════════════════════════╝${NC}"
 echo
 
 # Correct reboot syntax (original had 'reboot now' which is invalid)
