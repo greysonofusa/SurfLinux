@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Arch Linux Installer — Microsoft Surface Pro 8
+#  SurfLinux — Arch Linux Installer for Microsoft Surface Pro 8
 #  CPU  : Intel Core i5-1135G7 (Tiger Lake, 11th Gen)
 #  GPU  : Intel Iris Xe / Tiger Lake-LP GT2
 #  RAM  : 8 GB Physical  |  16 GB SWAP (swapfile)
@@ -8,12 +8,49 @@
 #  BOOT : systemd-boot + sbctl Secure Boot (custom keys + Microsoft vendor keys)
 #  OPT  : Steam / Gaming / linux-cachyos-surface kernel (CachyOS + Surface patches)
 # =============================================================================
+# =============================================================================
+#  PROJECT : SurfLinux
+#  GitHub  : https://github.com/YOUR_USERNAME/SurfLinux
+#
+#  CREDITS & ACKNOWLEDGEMENTS
+#  ─────────────────────────────────────────────────────────────────────────────
+#  Arch Linux           https://archlinux.org
+#    The foundation of this entire project. SurfLinux is built on top of Arch
+#    Linux and would not exist without the Arch Linux project, its maintainers,
+#    the Arch User Repository (AUR) community, and the ArchWiki — one of the
+#    best Linux documentation resources ever written.
+#    "A lightweight and flexible Linux distribution that tries to Keep It Simple."
+#
+#  linux-surface        https://github.com/linux-surface/linux-surface
+#    Surface hardware patches, iptsd (touchscreen/pen daemon), libwacom-surface
+#
+#  CachyOS              https://cachyos.org
+#    x86-64-v3 optimized package repos, BORE scheduler, kernel patches, LTO
+#
+#  linux-cachyos-surface  https://github.com/jonpetersathan/linux-cachyos-surface
+#    CachyOS + linux-surface patches merged into a single prebuilt kernel
+#
+#  System76 / COSMIC    https://github.com/pop-os/cosmic-epoch
+#    Rust-native Wayland desktop environment
+#
+#  Phantom Browser      https://github.com/greysonofusa/degoogledchromium
+#    De-Googled Chromium fork based on Cromite
+#
+#  erpalma / throttled  https://github.com/erpalma/throttled
+#    Tiger Lake power limit watchdog — the fix for throttle/fan-surge
+#
+#  Foxboron / sbctl     https://github.com/Foxboron/sbctl
+#    Secure Boot key manager with automatic pacman hook signing
+#
+#  Valve / Steam        https://store.steampowered.com
+#  FeralInteractive / gamemode  https://github.com/FeralInteractive/gamemode
+# =============================================================================
 # HOW TO USE:
 #   1. Boot the official Arch Linux ISO on your Surface Pro 8
 #   2. Connect to the internet (wifi-menu or ethernet via USB-C adapter)
-#   3. curl -O https://your-host/this-script.sh   (or paste it directly)
-#   4. nano this-script.sh  → fill in USER CONFIG section below
-#   5. chmod +x this-script.sh && bash this-script.sh
+#   3. curl -O https://raw.githubusercontent.com/YOUR_USERNAME/SurfLinux/main/surflinux.sh
+#   4. nano surflinux.sh  → fill in USER CONFIG section below
+#   5. chmod +x surflinux.sh && bash surflinux.sh
 # =============================================================================
 
 set -euo pipefail
@@ -52,7 +89,7 @@ SWAP_SIZE="16G"
 #  ░░  SAFETY CHECKS  ░░
 # =============================================================================
 
-banner "Surface Pro 8 — Arch Linux Installer"
+banner "SurfLinux — Surface Pro 8 Arch Linux Installer"
 
 [[ $EUID -ne 0 ]] && die "Must be run as root from the Arch live ISO."
 
@@ -976,7 +1013,7 @@ umount -R /mnt
 ok "Installation complete!"
 echo
 echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}${GREEN}║  Surface Pro 8 — Arch Linux install finished!            ║${NC}"
+echo -e "${BOLD}${GREEN}║  SurfLinux — Surface Pro 8 Arch Linux install finished!            ║${NC}"
 echo -e "${BOLD}${GREEN}╠══════════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}${GREEN}║  NEXT STEPS:                                             ║${NC}"
 echo -e "${BOLD}${GREEN}║  1. Remove USB/install media                             ║${NC}"
