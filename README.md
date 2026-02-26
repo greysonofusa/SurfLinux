@@ -1,15 +1,15 @@
 <div align="center">
 
 ```
- █████╗ ██████╗  ██████╗██╗  ██╗    ██╗     ██╗███╗   ██╗██╗   ██╗██╗  ██╗
-██╔══██╗██╔══██╗██╔════╝██║  ██║    ██║     ██║████╗  ██║██║   ██║╚██╗██╔╝
-███████║██████╔╝██║     ███████║    ██║     ██║██╔██╗ ██║██║   ██║ ╚███╔╝ 
-██╔══██║██╔══██╗██║     ██╔══██║    ██║     ██║██║╚██╗██║██║   ██║ ██╔██╗ 
-██║  ██║██║  ██║╚██████╗██║  ██║    ███████╗██║██║ ╚████║╚██████╔╝██╔╝ ██╗
-╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝    ╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝
+███████╗ ██╗   ██╗ ██████╗  ███████╗ ██╗      ██╗ ███╗   ██╗ ██╗   ██╗ ██╗  ██╗
+██╔════╝ ██║   ██║ ██╔══██╗ ██╔════╝ ██║      ██║ ████╗  ██║ ██║   ██║ ╚██╗██╔╝
+███████╗ ██║   ██║ ██████╔╝ █████╗   ██║      ██║ ██╔██╗ ██║ ██║   ██║  ╚███╔╝ 
+╚════██║ ██║   ██║ ██╔══██╗ ██╔══╝   ██║      ██║ ██║╚██╗██║ ██║   ██║  ██╔██╗ 
+███████║ ╚██████╔╝ ██║  ██║ ██║      ███████╗ ██║ ██║ ╚████║ ╚██████╔╝ ██╔╝ ██╗
+╚══════╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝      ╚══════╝ ╚═╝ ╚═╝  ╚═══╝  ╚═════╝  ╚═╝  ╚═╝
 ```
 
-### **Microsoft Surface Pro 8 — Arch Linux Install Script**
+### **SurfLinux — Arch Linux for the Microsoft Surface Pro 8**
 *CachyOS-optimized kernel · COSMIC Desktop · Thermal engineering · Steam-ready*
 
 ---
@@ -26,11 +26,13 @@
 
 ---
 
-## 🎯 What Is This?
+## 🎯 What Is SurfLinux?
 
-A **single-script, fully automated Arch Linux installer** purpose-built for the **Microsoft Surface Pro 8**. Boot the Arch ISO, run one command, walk away. When you come back you'll have a complete, gaming-ready system with the **linux-cachyos-surface** kernel (CachyOS performance patches merged with linux-surface hardware patches), the COSMIC desktop environment, a fully engineered thermal management stack, Steam, Phantom Browser, and a system tuned at every layer for Tiger Lake gaming.
+**SurfLinux** is a single-script, fully automated Arch Linux installer purpose-built for the **Microsoft Surface Pro 8**. Boot the Arch ISO, run one command, walk away. When you come back you'll have a complete, gaming-ready system with the **linux-cachyos-surface** kernel (CachyOS performance patches merged with linux-surface hardware patches), the COSMIC desktop environment, a fully engineered thermal management stack, Steam, Phantom Browser, and Secure Boot — with a system tuned at every layer for Tiger Lake gaming.
 
 No hand-holding through `pacstrap` steps. No forgotten packages. No rebooting into a broken system.
+
+> **Built on Arch Linux.** SurfLinux is a configuration and automation layer on top of [Arch Linux](https://archlinux.org) — one of the finest Linux distributions ever made. If you want to understand what SurfLinux sets up, the [ArchWiki](https://wiki.archlinux.org) is your best friend.
 
 ---
 
@@ -53,13 +55,13 @@ No hand-holding through `pacstrap` steps. No forgotten packages. No rebooting in
 
 ```bash
 # 1. Download the script
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/surface_pro8_arch_install.sh
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/SurfLinux/main/surflinux.sh
 
 # 2. Open it and fill in your username, password, and timezone
-nano surface_pro8_arch_install.sh
+nano surflinux.sh
 
 # 3. Make it executable and run
-chmod +x surface_pro8_arch_install.sh && bash surface_pro8_arch_install.sh
+chmod +x surflinux.sh && bash surflinux.sh
 ```
 
 > ⚠️ **This will erase your entire disk.** The script asks for confirmation before touching anything. Double-check your disk target before typing `yes`.
@@ -584,9 +586,11 @@ DISK=""                       # blank = auto-detect NVMe, or e.g. /dev/nvme0n1
 
 ## 🙏 Credits & Upstream Projects
 
+SurfLinux is a configuration and automation layer built entirely on the shoulders of these projects. Without them, none of this would exist.
+
 | Project | Role |
 |---|---|
-| [Arch Linux](https://archlinux.org) | The base system |
+| [**Arch Linux**](https://archlinux.org) | **The foundation.** SurfLinux runs on Arch Linux. The base system, pacman, AUR, and the incomparable ArchWiki are all Arch. |
 | [CachyOS](https://cachyos.org) | x86-64-v3 optimized repos, BORE scheduler, kernel patches |
 | [jonpetersathan/linux-cachyos-surface](https://github.com/jonpetersathan/linux-cachyos-surface) | CachyOS + linux-surface merged kernel |
 | [linux-surface](https://github.com/linux-surface/linux-surface) | Surface hardware patches, iptsd, libwacom-surface |
@@ -602,13 +606,18 @@ DISK=""                       # blank = auto-detect NVMe, or e.g. /dev/nvme0n1
 
 <div align="center">
 
-**Built for privacy. Engineered for thermals. Optimized for gaming. Designed for the Surface Pro 8.**
+**SurfLinux — Built on [Arch Linux](https://archlinux.org). Built for the Surface Pro 8.**
+
+*Privacy-first. Thermally engineered. Gaming-ready. Secure Boot enabled.*
 
 *Pull requests and issues welcome.*
 
 ![Arch Linux](https://img.shields.io/badge/BTW_I_use-Arch-1793D1?style=flat-square&logo=arch-linux&logoColor=white)
+![SurfLinux](https://img.shields.io/badge/project-SurfLinux-5E35B1?style=flat-square)
 ![CachyOS](https://img.shields.io/badge/kernel-linux--cachyos--surface-orange?style=flat-square)
 ![Thermal](https://img.shields.io/badge/thermals-engineered-green?style=flat-square)
 ![Secure Boot](https://img.shields.io/badge/Secure_Boot-sbctl-blue?style=flat-square)
+
+</div>
 
 </div>
