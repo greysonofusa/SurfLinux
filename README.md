@@ -20,6 +20,7 @@
 ![Steam](https://img.shields.io/badge/Steam-000000?style=for-the-badge&logo=steam&logoColor=white)
 ![Shell](https://img.shields.io/badge/Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
 ![CachyOS](https://img.shields.io/badge/CachyOS-x86--64--v3-orange?style=for-the-badge&logo=linux&logoColor=white)
+![Secure Boot](https://img.shields.io/badge/Secure_Boot-sbctl-blue?style=for-the-badge&logo=linux&logoColor=white)
 
 </div>
 
@@ -395,7 +396,124 @@ systemctl enable cosmic-greeter.service
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-A **pacman hook** automatically syncs both kernels and their initramfs images to the ESP after every `pacman -Syu` — boot entries never go stale after a kernel update.
+A **pacman hook** automatically syncs both kernels and their initramfs images to the ESP after every `pacman -Syu`, then calls `sbctl sign-all` to re-sign the updated files — boot entries never go stale or unsigned after a kernel update.
+
+---
+
+## 🔐 Secure Boot — sbctl with Auto-Signing
+
+The script sets up a complete, self-maintaining Secure Boot chain using [sbctl](https://github.com/Foxboron/sbctl). Once configured, every `pacman -Syu` that touches a kernel or bootloader automatically re-signs the updated binaries — Secure Boot never breaks after an update.
+
+### How it works
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  sbctl creates 3 RSA-4096 key pairs:                                │
+│    PK  (Platform Key)      — root of the trust chain               │
+│    KEK (Key Exchange Key)  — signs updates to the db               │
+│    db  (Database Key)      — used to sign EFI binaries             │
+│                                                                     │
+│  All EFI binaries are signed with db:                               │
+│    /boot/efi/EFI/systemd/systemd-bootx64.efi  (bootloader)        │
+│    /boot/efi/EFI/BOOT/BOOTX64.EFI             (fallback loader)   │
+│    /boot/efi/vmlinuz-linux-cachyos-surface     (primary kernel)    │
+│    /boot/efi/vmlinuz-linux                     (fallback kernel)   │
+│    /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed           │
+│         ↑ this signed source means bootctl updates stay signed too │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### What the install script does automatically
+
+The install script handles everything that can be scripted:
+
+- Installs `sbctl`
+- Generates your PK, KEK, and db key pairs (stored in `/var/lib/sbctl/keys/`)
+- Signs all EFI binaries using `sbctl sign -s` (the `-s` flag saves each path to the signing database)
+- Signs the systemd-boot source at `/usr/lib/` so loader updates stay signed automatically
+- Enables `systemd-boot-update.service` for automatic loader maintenance
+- Updates the pacman hook to call `sbctl sign-all` after every kernel update
+
+### ⚠️ What YOU must do manually (requires UEFI interaction)
+
+Key enrollment into the UEFI firmware cannot be scripted — it requires physical interaction with the Surface UEFI. The script prints these instructions at the end of the install, but they're reproduced here for reference.
+
+**Why `-m` (keep Microsoft's keys) is mandatory on Surface:**
+The Surface Pro 8's UEFI firmware and SAM (Surface Aggregator Module) are themselves signed and verified by Microsoft's keys. Enrolling your keys without `-m` would prevent Surface UEFI firmware updates from ever working and could leave the system in an unrecoverable state.
+
+**Step-by-step enrollment:**
+
+```
+STEP 1 — Put the Surface UEFI into Setup Mode
+  Power off → hold Volume Up + Power button together → enter UEFI
+  Navigate to: Security → Secure Boot → Clear Secure Boot Keys
+  Save and exit. Boot into Arch Linux.
+  (This clears the existing MS keys, putting firmware in Setup Mode)
+
+STEP 2 — Confirm Setup Mode is active
+  sudo sbctl status
+  → Must show:  Setup Mode: Enabled ✓
+  (If it shows Disabled, repeat Step 1)
+
+STEP 3 — Enroll your keys alongside Microsoft's vendor keys
+  sudo sbctl enroll-keys -m
+  → The -m flag is REQUIRED on Surface hardware
+
+STEP 4 — SHUT DOWN (do NOT reboot — Surface-specific requirement)
+  sudo shutdown now
+  A direct reboot bypasses the firmware key write step.
+  You must fully power off, then power back on.
+
+STEP 5 — Enable Secure Boot in the UEFI
+  Power on → hold Volume Up + Power → enter UEFI
+  Navigate to: Security → Secure Boot → Enable Secure Boot
+  Save and exit. Boot into Arch Linux.
+
+STEP 6 — Verify everything is working
+  sudo sbctl status
+  → Secure Boot: enabled  ✓
+  → Vendor Keys: microsoft ✓
+  → Setup Mode: Disabled  ✓
+
+  sudo bootctl status | grep 'Secure Boot'
+  → Secure Boot: enabled (user)  ✓
+```
+
+### How auto-signing works after updates
+
+After `sudo pacman -Syu`, the sequence is fully automatic:
+
+```
+pacman upgrades linux-cachyos-surface or systemd
+       ↓
+95-systemd-boot.hook fires (PostTransaction)
+       ↓
+New kernel/initramfs copied to ESP (/boot/efi/)
+       ↓
+sbctl sign-all re-signs every registered EFI binary
+       ↓
+sbctl re-signs /usr/lib/systemd-bootx64.efi.signed
+       ↓
+Next boot: UEFI verifies signature → boots normally
+```
+
+You never need to manually sign anything after a routine system update.
+
+### Troubleshooting Secure Boot
+
+If the system fails to boot after an update, boot into the stock kernel (`linux`) fallback entry — it is also signed. Then run:
+
+```bash
+sudo sbctl verify        # shows what's signed and what isn't
+sudo sbctl sign-all      # re-signs everything in the database
+sudo sbctl list-files    # shows the full signing registry
+```
+
+If keys ever need to be rotated:
+```bash
+sudo sbctl rotate-keys   # generates new keys and re-signs everything
+# Then repeat the enrollment steps above
+```
 
 ---
 
@@ -424,18 +542,31 @@ DISK=""                       # blank = auto-detect NVMe, or e.g. /dev/nvme0n1
 □  Open Steam → Settings → Compatibility → Enable Steam Play for all titles
 □  Add 'gamemoderun %command%' to Steam game launch options
 □  Verify Phantom Browser appears in the COSMIC app launcher
-□  Always plug in AC power before gaming — throttled AC profile activates automatically
+□  Always plug in AC power before gaming
+
+── Secure Boot Enrollment (after first successful boot) ──────────────────
+
+□  Check sbctl status: sudo sbctl status  (confirm keys exist)
+□  Enter Surface UEFI: power off → hold Volume Up + Power
+□  Navigate to Security → Secure Boot → Clear Secure Boot Keys (Setup Mode)
+□  Save, exit, boot back into Arch
+□  Verify Setup Mode: sudo sbctl status  → "Setup Mode: Enabled"
+□  Enroll keys: sudo sbctl enroll-keys -m  (the -m is mandatory on Surface)
+□  SHUT DOWN: sudo shutdown now  (do NOT reboot — Surface-specific requirement)
+□  Power on → hold Volume Up + Power → UEFI → Enable Secure Boot → save & exit
+□  Boot into Arch and verify: sudo sbctl status  → "Secure Boot: enabled"
+□  Final verify: sudo bootctl status | grep 'Secure Boot'  → "enabled (user)"
 ```
 
 ---
 
 ## ⚠️ Known Limitations
 
-- **Secure Boot** must be disabled in the Surface UEFI before booting the Arch ISO
-- **BitLocker** must be fully decrypted before the disk is wiped
-- **Cameras** require the linux-cachyos-surface kernel — they will not work on stock `linux`
-- **Fan speed cannot be directly controlled** — the Surface Aggregator Module firmware owns the fan curve. The thermal engineering in this script prevents the conditions that cause fan surges in the first place
-- **Phantom Browser Linux AppImage** may not be in the latest upstream release yet — handled gracefully with a clear message
+- **Secure Boot setup requires physical UEFI interaction** — the install script generates and registers all keys and signatures automatically, but key enrollment into the firmware requires you to enter the Surface UEFI manually. Full step-by-step instructions are printed at the end of the install and documented in the [Secure Boot section](#-secure-boot--sbctl-with-auto-signing) above
+- **Secure Boot was previously disabled** — if you're reinstalling over an existing Linux setup that had Secure Boot off, you'll need to clear existing keys in the UEFI before enrolling your sbctl keys
+- **Cameras** require the linux-cachyos-surface kernel — will not work on stock `linux`
+- **Fan speed cannot be directly controlled** — the Surface Aggregator Module firmware owns the fan curve. The thermal engineering in this script prevents the conditions that cause fan surges
+- **Phantom Browser Linux AppImage** may not be in the latest upstream release yet — handled gracefully
 - **linux-cachyos-surface prebuilt packages** may occasionally lag a kernel version behind — the script falls back to source build automatically
 
 ---
@@ -463,6 +594,7 @@ DISK=""                       # blank = auto-detect NVMe, or e.g. /dev/nvme0n1
 | [Phantom Browser](https://github.com/greysonofusa/degoogledchromium) | Privacy-focused browser |
 | [Cromite](https://github.com/uazo/cromite) | Chromium base for Phantom |
 | [erpalma/throttled](https://github.com/erpalma/throttled) | Tiger Lake power limit watchdog |
+| [Foxboron/sbctl](https://github.com/Foxboron/sbctl) | Secure Boot key manager — auto-signing on kernel updates |
 | [Valve / Steam](https://store.steampowered.com) | Gaming platform |
 | [FeralInteractive/gamemode](https://github.com/FeralInteractive/gamemode) | Per-game CPU/GPU performance optimiser |
 
@@ -477,5 +609,6 @@ DISK=""                       # blank = auto-detect NVMe, or e.g. /dev/nvme0n1
 ![Arch Linux](https://img.shields.io/badge/BTW_I_use-Arch-1793D1?style=flat-square&logo=arch-linux&logoColor=white)
 ![CachyOS](https://img.shields.io/badge/kernel-linux--cachyos--surface-orange?style=flat-square)
 ![Thermal](https://img.shields.io/badge/thermals-engineered-green?style=flat-square)
+![Secure Boot](https://img.shields.io/badge/Secure_Boot-sbctl-blue?style=flat-square)
 
 </div>
