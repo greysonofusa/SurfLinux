@@ -122,7 +122,7 @@ ok "Network is up."
 banner "Disk Setup"
 
 if [[ -z "$DISK" ]]; then
-    DISK=$(lsblk -dpnoNAME | grep "^/dev/nvme" | head -n1)
+    DISK=$(lsblk -dpnoNAME | grep "^/dev/nvme0" | head -n1)
     [[ -z "$DISK" ]] && DISK=$(lsblk -dpnoNAME | grep "^/dev/sd" | head -n1)
     [[ -z "$DISK" ]] && die "No suitable disk found. Set DISK= manually at the top of this script."
 fi
@@ -193,7 +193,7 @@ pacstrap -K /mnt \
     base base-devel linux linux-headers linux-firmware \
     intel-ucode \
     e2fsprogs dosfstools \
-    systemd-boot \
+    systemd \
     networkmanager \
     pipewire pipewire-alsa pipewire-pulse pipewire-jack wireplumber \
     xdg-desktop-portal xdg-user-dirs \
