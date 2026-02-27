@@ -265,7 +265,7 @@ mkinitcpio -P
 bootctl --esp-path=/boot/efi install
 
 # Get root UUID for boot entry
-ROOT_UUID=\$(blkid -s UUID -o value ${PART_ROOT})
+ROOT_UUID=\$blkid -s UUID -o value ${PART_ROOT}
 
 mkdir -p /boot/efi/loader/entries
 
@@ -503,7 +503,7 @@ Exec = /bin/sh -c '\
   for f in vmlinuz-linux-cachyos-surface initramfs-linux-cachyos-surface.img \
             initramfs-linux-cachyos-surface-fallback.img vmlinuz-linux \
             intel-ucode.img initramfs-linux.img initramfs-linux-fallback.img; do \
-    [ -f /boot/$f ] && cp /boot/$f /boot/efi/; \
+    [ -f /boot/\$f ] && cp /boot/\$f /boot/efi/; \
   done; \
   sbctl sign-all 2>/dev/null || true; \
   sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed \
