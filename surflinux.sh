@@ -193,7 +193,7 @@ pacman -S --noconfirm thermald
 systemctl enable thermald
 
 # ── CachyOS repositories ──────────────────────────────────────────────────────
-info "Adding CachyOS x86-64-v3 optimized repositories..."
+echo ">>> [INFO] Adding CachyOS x86-64-v3 optimized repositories..."
 pacman -U --noconfirm --needed \
     "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
     "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-22-1-any.pkg.tar.zst" \
@@ -223,7 +223,7 @@ pacman -Sy --noconfirm
 pacman -S --noconfirm iptsd libwacom-surface
 
 # ── linux-cachyos-surface kernel ───────────────────────────────────────────────
-info "Installing linux-cachyos-surface kernel..."
+echo ">>> [INFO] Installing linux-cachyos-surface kernel..."
 CACHYOS_SURFACE_REPO="jonpetersathan/linux-cachyos-surface"
 CACHYOS_SURFACE_DIR="/tmp/cachyos-surface-kernel"
 mkdir -p "\$CACHYOS_SURFACE_DIR"
@@ -244,6 +244,7 @@ if [[ -n "\$RELEASE_JSON" ]]; then
         done
         pacman -U --noconfirm \${CACHYOS_SURFACE_DIR}/*.pkg.tar.zst
     else
+        echo ">>> [WARN] No prebuilt packages found in latest release — falling back to AUR build."
         pacman -S --noconfirm --needed base-devel git
         sudo -u ${USERNAME} bash -c '
             cd /tmp
@@ -257,6 +258,7 @@ if [[ -n "\$RELEASE_JSON" ]]; then
         '
     fi
 else
+    echo ">>> [WARN] Could not reach GitHub API — falling back to AUR build."
     pacman -S --noconfirm --needed base-devel git
     sudo -u ${USERNAME} bash -c '
         cd /tmp
