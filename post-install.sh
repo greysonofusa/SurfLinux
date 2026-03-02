@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  SurfLinux — Post-Install EFI Boot & Secure Boot Configuration
+#  SurfLinux — Post-Install EFI Boot, Secure Boot & UFW Configuration
 # =============================================================================
 
 set -euo pipefail
@@ -97,4 +97,23 @@ sbctl sign -s /boot/efi/EFI/systemd/systemd-bootx64.efi  2>/dev/null || true
 sbctl sign -s /boot/efi/EFI/BOOT/BOOTX64.EFI             2>/dev/null || true
 
 echo ">>> Signing kernels..."
-sbctl sign -s /boot/efi/vmlinuz-linux-cachyos-surface
+sbctl sign -s /boot/efi/vmlinuz-linux-cachyos-surface 2>/dev/null || true
+sbctl sign -s /boot/efi/vmlinuz-linux                 2>/dev/null || true
+
+systemctl enable systemd-boot-update.service
+
+# ── UFW Firewall Configuration ────────────────────────────────────────────────
+echo ">>> Configuring UFW Firewall..."
+pacman -S --noconfirm --needed ufw
+systemctl enable ufw
+
+# We use '|| true' here because 'ufw enable' cannot manipulate netfilter rules
+# from inside a chroot environment. This ensures the defaults are set, but prevents 
+# the script from crashing. The ufw.service enabled above will start it on actual boot.
+ufw default deny incoming || true
+ufw default allow outgoing || true
+ufw enable || echo "[WARN] 'ufw enable' failed (expected inside a chroot). It will automatically activate on next boot."
+
+echo ""
+echo "[ OK ] Bootloader, Secure Boot, and Firewall logic complete!"
+echo "If your UEFI is currently in Setup Mode, run 'sbctl enroll-keys -m' to finish Secure Boot."
